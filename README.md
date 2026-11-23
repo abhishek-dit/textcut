@@ -26,7 +26,7 @@ You need [Rust](https://rustup.rs), Node 20+, ffmpeg 7+ and whisper.cpp.
 ```bash
 # macOS
 brew install ffmpeg whisper-cpp
-git clone https://github.com/<you>/textcut && cd textcut
+git clone https://github.com/abhishek-dit/textcut && cd textcut
 npm install
 scripts/get-model.sh          # 1.6 GB, best quality; `scripts/get-model.sh small` for a 466 MB one
 npm run tauri dev
