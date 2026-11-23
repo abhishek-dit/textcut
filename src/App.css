@@ -27,7 +27,15 @@ button.primary { background: var(--accent); color: #151515; border-color: var(--
 .status { margin: 0; padding: 6px 16px; color: #9a9894; border-bottom: 1px solid var(--line); }
 
 .editor { flex: 1; display: grid; grid-template-columns: minmax(320px, 45%) 1fr; min-height: 0; }
-video { width: 100%; max-height: 100%; background: #000; align-self: start; }
+.stage { position: relative; align-self: start; }
+video { width: 100%; max-height: calc(100vh - 60px); background: #000; display: block; }
+.caption {
+  position: absolute; left: 8%; right: 8%; bottom: 14%; margin: 0; text-align: center; pointer-events: none;
+  font-weight: 700; font-size: clamp(14px, 3.2vw, 28px); line-height: 1.25; color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 4px #000;
+}
+.toggle { display: flex; align-items: center; gap: 6px; color: #9a9894; margin-left: 8px; cursor: pointer; }
+code { font-size: 13px; color: #e8e6e3; }
 .transcript { padding: 20px 28px; overflow-y: auto; font-size: 18px; line-height: 1.9; user-select: text; }
 .transcript span { cursor: text; border-radius: 3px; }
 .transcript span:hover { background: #262626; }

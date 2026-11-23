@@ -1,21 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { cuts, editedLength, isFiller, keepRanges, skip, tokens, type Token, type Word } from "./edit";
+import {
+  captionCues, cuts, editedCues, editedLength, isFiller, keepRanges, skip, tokens, type Token, type Word,
+} from "./edit";
 import "./App.css";
 
 const MEDIA = ["mp4", "mov", "m4v", "mkv", "webm", "mp3", "wav", "m4a", "aac", "flac", "ogg"];
+type Transcript = { words: Word[]; silences: [number, number][]; duration: number };
+// Saved next to the media as <file>.textcut. Version 1; the deleted indices refer to tokens(words, silences).
+type Project = Transcript & { textcut: 1; deleted: number[]; captions: boolean };
+const PROJECT = ".textcut";
+
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 export default function App() {
   const [path, setPath] = useState<string | null>(null);
-  const [toks, setToks] = useState<Token[]>([]);
-  const [duration, setDuration] = useState(0);
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  const [captions, setCaptions] = useState(true);
   const [deleted, setDeleted] = useState<Set<number>>(new Set());
   const [history, setHistory] = useState<Set<number>[]>([]);
   const [status, setStatus] = useState("");
   const [now, setNow] = useState(0);
   const media = useRef<HTMLVideoElement>(null);
+  const duration = transcript?.duration ?? 0;
+  const toks: Token[] = useMemo(
+    () => (transcript ? tokens(transcript.words, transcript.duration, transcript.silences) : []), [transcript]);
+  const cues = useMemo(() => captionCues(toks, deleted), [toks, deleted]);
+  const cue = captions ? cues.find((c) => now >= c.start && now < c.end) : undefined;
 
   const cutList = useMemo(() => cuts(toks, deleted), [toks, deleted]);
   const keep = useMemo(() => keepRanges(toks, deleted, duration), [toks, deleted, duration]);
@@ -34,22 +46,38 @@ export default function App() {
   }
 
   async function openFile() {
-    const picked = await open({ filters: [{ name: "Video or audio", extensions: MEDIA }] });
+    const picked = await open({ filters: [{ name: "Video, audio or textcut project", extensions: [...MEDIA, "textcut"] }] });
     if (typeof picked !== "string") return;
-    setPath(picked);
-    setToks([]);
-    setDeleted(new Set());
+    const file = picked.endsWith(PROJECT) ? picked.slice(0, -PROJECT.length) : picked;
+    setPath(file);
+    setTranscript(null);
     setHistory([]);
-    setStatus("Transcribing on this computer…");
     try {
-      const t = await invoke<{ words: Word[]; silences: [number, number][]; duration: number }>("transcribe", { path: picked });
-      setDuration(t.duration);
-      setToks(tokens(t.words, t.duration, t.silences));
+      const saved = await invoke<string | null>("load_project", { path: file + PROJECT });
+      if (saved) {  // reopening: no need to transcribe again
+        const p: Project = JSON.parse(saved);
+        setDeleted(new Set(p.deleted));
+        setCaptions(p.captions);
+        setTranscript(p);
+        setStatus("");
+        return;
+      }
+      setDeleted(new Set());
+      setStatus("Transcribing on this computer…");
+      setTranscript(await invoke<Transcript>("transcribe", { path: file }));
       setStatus("");
     } catch (e) {
-      setStatus(`Transcription failed: ${e}`);
+      setStatus(`Couldn't open: ${e}`);
     }
   }
+
+  // Autosave after every change, so closing the app never loses an edit.
+  useEffect(() => {
+    if (!path || !transcript) return;
+    const p: Project = { textcut: 1, ...transcript, deleted: [...deleted].sort((a, b) => a - b), captions };
+    invoke("save_project", { path: path + PROJECT, data: JSON.stringify(p) })
+      .catch((e) => setStatus(`Couldn't save the project: ${e}`));
+  }, [path, transcript, deleted, captions]);
 
   async function exportFile() {
     if (!path) return;
@@ -61,8 +89,8 @@ export default function App() {
     if (!output) return;
     setStatus("Exporting…");
     try {
-      await invoke("export", { input: path, keep, output });
-      setStatus(`Saved ${output}`);
+      await invoke("export", { input: path, keep, output, captions: editedCues(cues, keep), burn: captions });
+      setStatus(`Saved ${output} (+ .srt captions)`);
     } catch (e) {
       setStatus(`Export failed: ${e}`);
     }
@@ -131,6 +159,10 @@ export default function App() {
             <button onClick={() => edit(new Set())} hidden={!deleted.size}>
               Restore all
             </button>
+            <label className="toggle">
+              <input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} />
+              Burn in captions
+            </label>
             <span className="len">
               {fmt(duration)} → {fmt(editedLength(keep))}
             </span>
@@ -143,7 +175,10 @@ export default function App() {
 
       {path ? (
         <section className="editor">
-          <video ref={media} src={convertFileSrc(path)} controls />
+          <div className="stage">
+            <video ref={media} src={convertFileSrc(path)} controls />
+            {cue && <p className="caption">{cue.text}</p>}
+          </div>
           <article className="transcript">
             {toks.map((t, i) => {
               const cls = [t.kind, deleted.has(i) && "deleted", now >= t.start && now < t.end && "current"]
@@ -159,7 +194,8 @@ export default function App() {
       ) : (
         <section className="empty">
           <h1>Edit video by editing text.</h1>
-          <p>Open a recording. It's transcribed on this computer, nothing is uploaded.</p>
+          <p>Open a recording. It's transcribed on this computer, nothing is uploaded. Your edit is saved next to it
+            as a <code>.textcut</code> file, so you can close and come back.</p>
           <p>Select words and press <kbd>Delete</kbd> to cut them. <kbd>⌘Z</kbd> undoes. <kbd>Space</kbd> plays.</p>
         </section>
       )}

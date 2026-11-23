@@ -1,7 +1,19 @@
 // npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cuts, isFiller, keepRanges, skip, tokens } from "./edit.ts";
+import { captionCues, cuts, editedCues, isFiller, keepRanges, skip, toEdited, tokens } from "./edit.ts";
+
+test("captions break at punctuation, cuts and length; times map onto the cut video", () => {
+  const w = "one two three four five six seven. eight nine".split(" ")
+    .map((text, i) => ({ text, start: i, end: i + 0.5 }));
+  const t = tokens(w, 10);
+  assert.deepEqual(captionCues(t, new Set()).map((c) => c.text), ["one two three", "four five six", "seven.", "eight nine"]);
+  assert.equal(captionCues(t, new Set([1]))[0].text, "one"); // a cut ends the line
+  const keep = [{ start: 0, end: 2 }, { start: 5, end: 10 }];
+  assert.equal(toEdited(6, keep), 3);
+  assert.equal(toEdited(3, keep), 2); // inside a cut: snaps to where the cut is
+  assert.deepEqual(editedCues([{ start: 5.5, end: 6, text: "x" }], keep), [{ text: "x", start: 2.5, end: 3 }]);
+});
 
 const words = [
   { start: 0.0, end: 0.4, text: "Hello" },

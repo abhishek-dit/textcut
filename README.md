@@ -17,15 +17,19 @@ subscription.
 - **Remove fillers** (um, uh, erm, hmm…) and **shorten pauses** in one click. Pauses come from the audio itself, not
   from guessed word timings
 - **Undo** everything (<kbd>⌘Z</kbd>), restore any cut word by deleting it again
+- **Captions:** shown live over the preview, burned into the export, and saved as an `.srt` next to it. Lines break
+  at punctuation and cuts, and Indic scripts (Kannada, Tamil, Malayalam, Hindi…) render with correct letter shaping
+- **Projects save themselves:** your edit lives in `<video>.textcut` next to the recording. Open the video or the
+  project file again and you're back where you left off, without transcribing again
 - **Exports** MP4 (H.264/AAC) or M4A for audio-only recordings, with ffmpeg
 
 ## Install (from source, for now)
 
-You need [Rust](https://rustup.rs), Node 20+, ffmpeg 7+ and whisper.cpp.
+You need [Rust](https://rustup.rs), Node 20+, ffmpeg 7+ (with libass for burned-in captions) and whisper.cpp.
 
 ```bash
-# macOS
-brew install ffmpeg whisper-cpp
+# macOS (ffmpeg-full has libass; the plain ffmpeg formula can't burn captions)
+brew install ffmpeg-full whisper-cpp
 git clone https://github.com/abhishek-dit/textcut && cd textcut
 npm install
 scripts/get-model.sh          # 1.6 GB, best quality; `scripts/get-model.sh small` for a 466 MB one
@@ -43,6 +47,7 @@ PATH. Set `TEXTCUT_MODEL=/path/to/ggml-model.bin` to use a model from somewhere 
 | Word-level transcript | whisper.cpp (`-ml 1 -sow`), prompted to keep fillers it normally tidies away |
 | The edit | a set of deleted words/pauses → cut list → kept ranges ([src/edit.ts](src/edit.ts)) |
 | Export | ffmpeg `trim`/`atrim` + `concat`, filter graph from a file so 500 cuts are fine |
+| Captions | kept words → lines → retimed onto the cut video → ASS burned in by libass (`shaping=complex`) + `.srt` |
 
 ## Tests
 
@@ -53,8 +58,9 @@ TEXTCUT_SAMPLE=clip.mp4 cargo test --manifest-path src-tauri/Cargo.toml -- --ign
 
 ## Roadmap
 
-- [ ] Save/open projects (`.textcut` file next to the video)
-- [ ] Burned-in captions with styles, including correct Indic shaping (Kannada, Tamil, Malayalam, Hindi…)
+- [x] Save/open projects (`.textcut` file next to the video)
+- [x] Burned-in captions + `.srt`, with correct Indic shaping
+- [ ] Caption styles (font, size, position, word-by-word highlight)
 - [ ] 9:16 export for Shorts/Reels
 - [ ] Bundled whisper.cpp + ffmpeg, signed installers for macOS, Windows, Linux
 - [ ] Noise removal ("studio sound") with an open model

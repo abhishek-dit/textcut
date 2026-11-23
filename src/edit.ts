@@ -62,3 +62,49 @@ export const isFiller = (tok: Token) =>
   tok.kind === "word" && FILLERS.has(tok.text.toLowerCase().replace(/[^\p{L}]/gu, ""));
 
 export const editedLength = (ranges: Range[]) => ranges.reduce((s, r) => s + r.end - r.start, 0);
+
+export type Cue = Range & { text: string };
+const MAX_WORDS = 5;
+const MAX_CUE = 2.5; // seconds
+const ENDS_PHRASE = /[.!?,;:।॥]$/;
+
+/** Kept words grouped into short caption lines (original timeline). A line breaks at punctuation, at a cut or
+ * pause, or when it gets long. */
+export function captionCues(toks: Token[], deleted: Set<number>): Cue[] {
+  const out: Cue[] = [];
+  let cur: Cue | null = null;
+  let n = 0;
+  toks.forEach((t, i) => {
+    if (t.kind === "pause" || deleted.has(i)) {
+      cur = null;
+      return;
+    }
+    if (cur && (n >= MAX_WORDS || t.end - cur.start > MAX_CUE)) cur = null;
+    if (!cur) {
+      cur = { start: t.start, end: t.end, text: t.text };
+      n = 1;
+      out.push(cur);
+    } else {
+      cur.end = t.end;
+      cur.text += " " + t.text;
+      n++;
+    }
+    if (ENDS_PHRASE.test(t.text)) cur = null;
+  });
+  return out;
+}
+
+/** Original time -> time in the exported (cut) video. */
+export function toEdited(t: number, keep: Range[]): number {
+  let offset = 0;
+  for (const r of keep) {
+    if (t < r.start) return offset;
+    if (t <= r.end) return offset + t - r.start;
+    offset += r.end - r.start;
+  }
+  return offset;
+}
+
+export const editedCues = (cues: Cue[], keep: Range[]): Cue[] =>
+  cues.map((c) => ({ text: c.text, start: toEdited(c.start, keep), end: toEdited(c.end, keep) }))
+    .filter((c) => c.end - c.start > 0.05);
