@@ -6,7 +6,7 @@ Open a recording, and textcut transcribes it on your computer. Delete words in t
 itself. One click removes every "um", "uh" and long pause. Nothing is uploaded, and there's no account or
 subscription.
 
-<!-- demo.gif: select a sentence, press Delete, the video skips it, Export -->
+![textcut: remove fillers and pauses in one click, delete a word, the video follows](docs/demo.gif)
 
 ## What it does
 
